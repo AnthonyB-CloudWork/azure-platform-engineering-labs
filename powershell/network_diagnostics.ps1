@@ -1,3 +1,13 @@
+param (
+    [Parameter(Mandatory = $false)]
+    [ValidateNotNullOrEmpty()]
+    [string]$Target = "learn.microsoft.com",
+
+    [Parameter(Mandatory = $false)]
+    [ValidateRange(1, 65535)]
+    [int]$Port = 443
+)
+
 # Collect active network adapters that have an IPv4 address.
 $activeAdapters = Get-NetIPConfiguration | Where-Object {
     $_.NetAdapter.Status -eq "Up" -and $_.IPv4Address
@@ -30,7 +40,7 @@ $dnsResolutionSucceeded = $false
 
 try {
     Resolve-DnsName `
-        -Name "learn.microsoft.com" `
+        -Name $Target `
         -Type A `
         -ErrorAction Stop |
         Out-Null
@@ -42,17 +52,17 @@ catch {
 }
 
 # Test whether an HTTPS connection can reach port 443.
-$httpsConnectionSucceeded = Test-NetConnection `
-    -ComputerName "learn.microsoft.com" `
-    -Port 443 `
+$tcpConnectionSucceeded = Test-NetConnection `
+    -ComputerName $Target `
+    -Port $Port `
     -InformationLevel Quiet
 
 # Organize the connectivity test results.
 $connectivityTests = [PSCustomObject]@{
-    DnsTarget                = "learn.microsoft.com"
-    DnsResolutionSucceeded   = $dnsResolutionSucceeded
-    HttpsTarget              = "learn.microsoft.com:443"
-    HttpsConnectionSucceeded = $httpsConnectionSucceeded
+    DnsTarget              = $Target
+    DnsResolutionSucceeded = $dnsResolutionSucceeded
+    TcpTarget              = "${Target}:$Port"
+    TcpConnectionSucceeded = $tcpConnectionSucceeded
 }
 
 # Combine the adapter and connectivity information into one report.

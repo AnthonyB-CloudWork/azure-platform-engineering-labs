@@ -35,9 +35,11 @@ $adapterInventory = foreach ($adapter in $activeAdapters) {
     }
 }
 
-# Test whether DNS can resolve Microsoft's Learn website.
+# Set initial DNS test values.
 $dnsResolutionSucceeded = $false
+$dnsError = $null
 
+# Attempt to resolve the supplied hostname.
 try {
     Resolve-DnsName `
         -Name $Target `
@@ -49,20 +51,58 @@ try {
 }
 catch {
     $dnsResolutionSucceeded = $false
+    $dnsError = $_.Exception.Message
 }
 
-# Test whether an HTTPS connection can reach port 443.
-$tcpConnectionSucceeded = Test-NetConnection `
-    -ComputerName $Target `
-    -Port $Port `
-    -InformationLevel Quiet
+# Set initial TCP test values.
+$tcpConnectionSucceeded = $false
+$tcpError = $null
+
+# Run the TCP test only when DNS resolution succeeds.
+if ($dnsResolutionSucceeded) {
+    try {
+        $tcpConnectionSucceeded = Test-NetConnection `
+            -ComputerName $Target `
+            -Port $Port `
+            -InformationLevel Quiet `
+            -WarningAction SilentlyContinue
+
+        if (-not $tcpConnectionSucceeded) {
+            $tcpError = "TCP connection to ${Target}:$Port failed."
+        }
+    }
+    catch {
+        $tcpConnectionSucceeded = $false
+        $tcpError = $_.Exception.Message
+    }
+}
+else {
+    $tcpError = "TCP test skipped because DNS resolution failed."
+}
+
+# Determine the overall status and script exit code.
+$overallStatus = "Success"
+$exitCode = 0
+
+if (-not $dnsResolutionSucceeded) {
+    $overallStatus = "DnsFailure"
+    $exitCode = 1
+}
+elseif (-not $tcpConnectionSucceeded) {
+    $overallStatus = "TcpFailure"
+    $exitCode = 2
+}
 
 # Organize the connectivity test results.
 $connectivityTests = [PSCustomObject]@{
     DnsTarget              = $Target
     DnsResolutionSucceeded = $dnsResolutionSucceeded
+    DnsError               = $dnsError
     TcpTarget              = "${Target}:$Port"
     TcpConnectionSucceeded = $tcpConnectionSucceeded
+    TcpError               = $tcpError
+    OverallStatus          = $overallStatus
+    ExitCode               = $exitCode
 }
 
 # Combine the adapter and connectivity information into one report.
@@ -76,7 +116,7 @@ $networkReport = [PSCustomObject]@{
 # Determine the root folder of the Git project.
 $projectRoot = Split-Path -Parent $PSScriptRoot
 
-# Build the path to the existing output folder.
+# Build the path to the output folder.
 $outputDirectory = Join-Path -Path $projectRoot -ChildPath "output"
 
 # Create the output folder when it does not already exist.
@@ -102,3 +142,7 @@ Write-Host "`nConnectivity tests:"
 $connectivityTests | Format-List
 
 Write-Host "JSON report saved to: $jsonPath"
+Write-Host "Script completed with exit code: $exitCode"
+
+# Return the result code to PowerShell or an automation system.
+exit $exitCode

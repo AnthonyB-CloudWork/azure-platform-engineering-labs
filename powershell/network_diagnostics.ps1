@@ -8,6 +8,17 @@ param (
     [int]$Port = 443
 )
 
+# Build the path to the reusable logging module.
+$loggingModulePath = Join-Path `
+    -Path $PSScriptRoot `
+    -ChildPath "modules\Logging\Logging.psm1"
+
+# Load the logging function.
+Import-Module `
+    -Name $loggingModulePath `
+    -Force `
+    -ErrorAction Stop
+
 # Determine the root folder of the Git project.
 $projectRoot = Split-Path -Parent $PSScriptRoot
 
@@ -27,33 +38,6 @@ $jsonPath = Join-Path `
 $logPath = Join-Path `
     -Path $outputDirectory `
     -ChildPath "network_diagnostics.log"
-
-# Write a timestamped entry to the log file and terminal.
-function Write-Log {
-    param (
-        [Parameter(Mandatory)]
-        [ValidateNotNullOrEmpty()]
-        [string]$Message,
-
-        [Parameter(Mandatory = $false)]
-        [ValidateSet("INFO", "SUCCESS", "WARNING", "ERROR")]
-        [string]$Level = "INFO",
-
-        [Parameter(Mandatory)]
-        [ValidateNotNullOrEmpty()]
-        [string]$LogPath
-    )
-
-    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    $logEntry = "$timestamp [$Level] $Message"
-
-    Add-Content `
-        -Path $LogPath `
-        -Value $logEntry `
-        -Encoding utf8
-
-    Write-Host $logEntry
-}
 
 Write-Log `
     -Message "Starting network diagnostics for ${Target}:$Port." `
